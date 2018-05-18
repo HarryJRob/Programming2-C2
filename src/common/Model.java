@@ -1,5 +1,6 @@
 package common;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -9,7 +10,11 @@ import java.util.List;
  * 
  * You are not permitted to modify this model, but you can extend it.
  */
-public abstract class Model {
+
+//MODIFICATION: implements Serializable
+public abstract class Model implements Serializable {
+	
+	private static final long serialVersionUID = 3207692159068878506L;
 	
 	protected String name;
 	private List<UpdateListener> updateListeners = new ArrayList<UpdateListener>();

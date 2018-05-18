@@ -2,6 +2,7 @@ package common.communcation;
 
 import java.io.Serializable;
 
+//A message used to communicate between the client and server
 public class Message implements Serializable {
 
 	private static final long serialVersionUID = -5972560872137084464L;

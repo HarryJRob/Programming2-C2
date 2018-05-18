@@ -4,6 +4,7 @@ import common.Model;
 
 import java.io.Serializable;
 
+//Models a user
 public class User extends Model implements Serializable {
 
 

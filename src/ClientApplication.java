@@ -1,7 +1,6 @@
 
 import java.io.IOException;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,12 +15,14 @@ import common.communcation.*;
 public class ClientApplication implements ClientInterface {
 
 	Socket clientSocket;
-	Map<User, Map<Dish, Number>> baskets;
+	HashMap<User, HashMap<Dish, Number>> baskets;
 	List<Order> orders;
 	
 	/*Notes: 
 	* 1 If a connection to the server fails then the client will throw an error.
 	* 	The GUI should handle this but it doesn't so ¯\_(ツ)_/¯
+	* 2 A thread is needed to constantly check for updates from the server.
+	* 	I did not have time to implement this and so some functionality will not work
 	*/
 	public static void main(String[] args) throws IOException {
 		ClientApplication clientApp = new ClientApplication();
@@ -30,7 +31,7 @@ public class ClientApplication implements ClientInterface {
 	
 	public ClientInterface initialise() throws IOException {
 		clientSocket = new Socket("localhost", Comms.PORT_NUM);
-		baskets = new HashMap<User, Map<Dish, Number>>();
+		baskets = new HashMap<User, HashMap<Dish, Number>>();
 		return this;
 	}
 	
@@ -50,26 +51,17 @@ public class ClientApplication implements ClientInterface {
 		return (User) Comms.recieveMessage(clientSocket).getMessageContents();
 	}
 
+	//Why u spamerino??
 	@Override
 	public List<Postcode> getPostcodes() {
 		Comms.sendMessage(new Message("GET_POSTCODES", null), clientSocket);
-		Integer noRecieving = (Integer) Comms.recieveMessage(clientSocket).getMessageContents();
-		ArrayList<Postcode> returnList = new ArrayList<Postcode>();
-		for(int i = 0; i < noRecieving; i++) {
-			returnList.add((Postcode) Comms.recieveMessage(clientSocket).getMessageContents());
-		}
-		return returnList;
+		return (List<Postcode>) Comms.recieveMessage(clientSocket).getMessageContents();
 	}
 
 	@Override
 	public List<Dish> getDishes() {
 		Comms.sendMessage(new Message("GET_DISHES", null), clientSocket);
-		Integer noRecieving = (Integer) Comms.recieveMessage(clientSocket).getMessageContents();
-		ArrayList<Dish> returnList = new ArrayList<Dish>();
-		for(int i = 0; i < noRecieving; i++) {
-			returnList.add((Dish) Comms.recieveMessage(clientSocket).getMessageContents());
-		}
-		return returnList;
+		return (List<Dish>) Comms.recieveMessage(clientSocket).getMessageContents();
 	}
 
 	@Override
@@ -89,12 +81,12 @@ public class ClientApplication implements ClientInterface {
 
 	@Override
 	public Number getBasketCost(User user) {
-		Map<Dish, Number> dishes = baskets.get(user);
+		Map<Dish, Number> dishes = baskets.get(user); 
 		float totalCost = 0;
 		for(Dish d : dishes.keySet()) {
-			totalCost += (float) d.getPrice() * (float) dishes.get(d);
+			totalCost += d.getPrice().floatValue() * dishes.get(d).floatValue();
 		}
-		return (Number) totalCost;
+		return totalCost;
 	}
 
 	@Override
@@ -117,7 +109,6 @@ public class ClientApplication implements ClientInterface {
 
 	@Override
 	public Order checkoutBasket(User user) {
-		//TODO: Order takes a distance?
 		Order o = new Order(user,0 ,baskets.get(user));
 		Comms.sendMessage(new Message("NEW_ORDER", o), clientSocket);
 		return o;
@@ -131,29 +122,22 @@ public class ClientApplication implements ClientInterface {
 	@Override
 	public List<Order> getOrders(User user) {
 		Comms.sendMessage(new Message("GET_ORDERS", user), clientSocket);
-		Integer noRecieving = (Integer) Comms.recieveMessage(clientSocket).getMessageContents();
-		ArrayList<Order> returnList = new ArrayList<Order>();
-		for(int i = 0; i < noRecieving; i++) {
-			returnList.add((Order) Comms.recieveMessage(clientSocket).getMessageContents());
-		}
-		return returnList;
+		return (List<Order>) Comms.recieveMessage(clientSocket).getMessageContents();
 	}
 
 	@Override
 	public boolean isOrderComplete(Order order) {
-		return order.isFinished();
+		return order.getStatus().equals("Complete");
 	}
 
 	@Override
 	public String getOrderStatus(Order order) {
-		// TODO Auto-generated method stub
-		return null;
+		return order.getStatus();
 	}
 
 	@Override
 	public Number getOrderCost(Order order) {
-		// TODO Auto-generated method stub
-		return null;
+		return order.getCost();
 	}
 
 	@Override

@@ -1,0 +1,406 @@
+Modifications to base given code:
+
+All classes which extend model are now part of the common.Models package. This is to keep the project organized and maintain my sanity.
+This requires that all interfaces and windows have to be updated to import this packages and so have been modified to import this.
+
+Model now implements serializable
+
+-----------------
+
+Part 1: Ingredients, Suppliers and Sushi Dishes
+
+List of classes implemented (written as package.class)
+
+common.Models.Dish.class
+Models.Ingredient.class
+Models.Supplier.class
+
+List of methods implemented (written as package.class.method):
+
+common.Models.Dish.
+		addIngredient
+		removeIngredient
+		setRecipe
+		getIngredientAmounts
+		getName
+		getDescription
+		getPrice
+
+common.Models.Ingredient.
+		getName
+		getUnit
+		getSupplier
+
+common.Models.Supplier.
+		addSuppliedIngredient
+		getName
+		getDistance
+		getSuppliedIngredients
+
+1 paragraph description of what you did:
+
+Extended model and added needed fields according to the specification.
+Added getters and setters for these methods
+
+-----------------
+
+Part 2: Stock Management 
+
+List of classes implemented (written as package.class)
+
+server.StockManager.MoniteredItem.class
+server.StockManager.MoniteredDish.class
+server.StockManager.MoniteredIngredient.class
+server.StockManager.StockManager.class
+
+List of methods implemented (written as package.class.method):
+
+server.StockManager.MoniteredItem.
+		setStock
+		setThreshold
+		setResupplyAmt
+		setBeingRestocked
+		getStockedAmount
+		getResupplyAmount
+		getResupplyThreshold
+		isBeingRestocked		
+
+server.StockManager.MoniteredDish.
+		getDish
+
+server.StockManager.MoniteredIngredient.
+		getIngredient
+
+server.StockManager.StockManager.
+		run
+		canBeMade
+		makeDish
+		findDish
+		findIngredient
+			//A bunch of getters and setters
+			//It may be possible to just have getters to retrieve each list in stock manager
+			//However this provides unsynchronized access
+		getDrones
+		getStaff
+		getDishes
+		addDish
+		removeDish
+		setDishStock
+		setDishStock
+		setDishRecipe
+		addIngredientToDish
+		removeIngredientFromDish
+		setDishRestockLevels
+		getRestockThreshold
+		getRestockAmount
+		getRecipe
+		getDishStockLevels
+		dishExists
+		willRestockDishes
+		clearDishes
+		getIngredients
+		setIngredientStock
+		addIngredient
+		removeIngredient
+		setIngredientRestockLevels
+		getRestockThreshold
+		getRestockAmount
+		getIngredientStockLevels
+		setIngredientStock
+		ingredientExists
+		willRestockIngredients
+		clearIngredients
+		addOrder
+		removeOrder
+		getOrders
+		getMoniteredDishes
+		getMoniteredIngredients
+		clearStaff
+		clearDrones
+		clearOrders	
+
+
+1 paragraph description of what you did:
+
+Added a abstract parent class MoniteredItem.class which keeps track of the stocked amount, resupply threshold and resupply amount.
+Added two child classes to extend MoniteredItem for Dish and Ingredient.
+Added a StockManager class which keeps track of these monitered ingredients and dishes and provides getters and setters for them.
+Made StockManager implement runnable such that it can look over it's monitered items and if one is below it's resupply threshold it can get the relevant staff or drone to restock it.
+Since Drones are now managed in the stockManager class to allow the pickup of ingredients from suppliers orders now need to be as well.
+-----------------
+
+Part 3: Kitchen Staff 
+
+List of classes implemented (written as package.class)
+
+server.Staff.class
+
+List of methods implemented (written as package.class.method):
+
+server.Staff.
+		run
+		getName
+		getStatus
+		giveTask
+
+1 paragraph description of what you did:
+
+Created a staff class which can be run as a thread.
+When given a task it will wait 40 to 60s before restocking the dish by it's resupply amount
+
+Note: Modelling a staff member makes very little sense.
+
+-----------------
+
+Part 4: Communication Layer 
+
+List of classes implemented (written as package.class)
+
+common.communication.Comms.class
+common.communication.Message.class
+
+List of methods implemented (written as package.class.method):
+
+common.communication.Comms.
+		sendMessage
+		recieveMessage
+
+common.communication.Message.
+		getMessageType
+		getMessageContents
+
+1 paragraph description of what you did:
+
+Created a abstract class Comms with statis methods to send a Message object via a socket.
+Created a message class to act as a packet of data
+
+-----------------
+
+Part 5: Client 
+
+List of classes implemented (written as package.class)
+
+clientApplication.class
+
+List of methods implemented (written as package.class.method):
+
+clientApplication.
+		main
+		initialise
+		launchGUI
+		register
+		login
+		getPostcodes	//Note: This is called constantly by the client on the register screen
+		getDishes
+		getDishDescription
+		getDishPrice
+		getBasket
+		getBaskCost
+		addDishToBasket
+		updateDishInBasket
+		checkoutBasket
+		clearBasket
+		getOrders
+		isOrderComplete
+		getOrderStatus
+		getOrderCost
+		cancelOrder
+		addUpdateListener
+		notifyUpdate
+
+1 paragraph description of what you did:
+
+Implemented all methods from the interface and those asked from then spec.
+Note: The client does not remain fully in sync with the server. In order for this to happen another thread would be needed to listen for input from the server. However this would cause concurency issues with the interface methods in the current implementation of the interface
+
+UpdateListener and notify update have not been implemented. Any new plugin should use the interface methods not an update listener. 
+
+-----------------
+
+Part 6: Drones 
+
+List of classes implemented (written as package.class)
+
+server.Drone.class
+
+List of methods implemented (written as package.class.method):
+
+server.Drone.
+		run
+		getname
+		getSpeed
+		getStatus
+		giveTask
+		giveTask		
+
+1 paragraph description of what you did:
+
+Added a drone class which can be given a task to deliver or restock a ingredient. This runs a thread which based on the distance between the supplier/user waits that long before delivering/restocking
+
+-----------------
+
+Part 7: Configuration 
+
+List of classes implemented (written as package.class)
+
+ServerApplication$Configuration.class		(Internal class of ServerApplication)
+
+List of methods implemented (written as package.class.method):
+
+ServerApplication$Configuration.
+		loadConfiguration
+
+1 paragraph description of what you did:
+
+Created a internal class in ServerApplication.class which reads a input configuration file.
+
+Note: This should be just a method but the specification ask for a class.
+
+-----------------
+
+Part 8: Server 
+
+
+
+
+List of classes implemented (written as package.class)
+
+ServerApplication.class
+ServerApplication$ConnectionManager.class
+ServerApplication$ConnectionManager$Connection.class
+
+List of methods implemented (written as package.class.method):
+
+ServerApplication.
+
+		main
+		initialise
+		launchGUI
+		loadConfiguration
+		setRestockingIngredientsEnabled
+		setRestockingDishesEnabled
+		setStock
+		setStock
+		getDishes
+		addDish
+		removeDish
+		addIngredientToDish
+		removeIngredienFromDish
+		setRecipe
+		setRestockLevels
+		getRestockThreshold
+		getRestockAmount
+		getRecipe
+		getDishStockLevels
+		getIngredients
+		addIngredient
+		removeIngredient
+		setRestockLevels
+		getRestockThreshold
+		getRestockAmount
+		getIngredientStockLevels
+		getSuppliers
+		addSupplier
+		removeSupplier
+		getSupplierDistance
+		getDrones
+		addDrone
+		removeDrone
+		getDroneSpeed
+		getDroneStatus
+		getStaff
+		addStaff
+		removeStaff
+		getStaffStatus
+		getOrders
+		removeOrder
+		getOrderDistance
+		isOrderComplete
+		getOrderStatus
+		getOrderCost
+		getPostcodes
+		addPostcode		//Every other add method returns their relevant Object but this one doesn't. Inconsistent
+		removePostcode
+		getUsers
+		removeUser
+		addUpdateListener
+		notifyUpdate
+
+ServerApplication$ConnectionManager.
+		run
+
+ServerApplication$ConnectionManager$Connection.
+		run
+		parseMessage
+
+ServerApplication$Configuration.
+		loadConfiguration
+
+ServerApplication$PersistenceLayer
+		savePersistence
+		loadPersistence
+
+1 paragraph description of what you did:
+
+Implemented all interface methods and specification methods. 
+Added a threable class for a connection manager which listens for incoming connections creating new connections.
+Added a threable class for a connection to respond to a message from a socket.
+
+-----------------
+
+Part 9: Persistence 
+
+List of classes implemented (written as package.class)
+
+ServerApplication$PersistenceLayer.class
+
+List of methods implemented (written as package.class.method):
+
+ServerApplication$PersistenceLayer
+		savePersistence
+		loadPersistence
+
+1 paragraph description of what you did:
+
+Added a internal class to ServerApplication to load and save to a persistence.txt file
+Made the server load persistence when it intialises.
+Realized no method is given for when the server is closing so the savePersistence method can never be called reponsibly. 
+(If you wanted to do it iresponsibly after every model update you could savePersistence all over again)
+
+-----------------
+
+Assumptions made:
+
+Baskets are maintainted on the client only
+Plugins will use the given interface methods rather than a update listener.
+
+Any other comments:
+
+The specification was more of an obstacle than a help. 
+
+This task would have been greatly more enjoyable if we were given just the windows and interfaces and told ClientApplication and ServerApplication must be implemented. Then the use of models, items, dishes, comms etc. could be used as guidance not as mandatory allowing for a simpler less painful implementation.
+
+Modification of the interface should be made to include a onClose event for the backend. This will allow for the backend to close it's threads and ports correctly without erroring out and the persitence layer to be used responsibly.
+
+We should study client-server applications before we're told to implement one or at least pointed in the right direction.
+
+Examples of when to synchronize and when not to should be given in the control flow notes. 
+
+Most if not all of the models should be provided to begin with as programming them takes little to no effort and is more of a time waste.
+
+Structure the tasks more appropriately. The hardest part of this project is the server and client communcation (Although I assume these will be marked lightly as we havent learnt about them yet) and should be implemented first. Moreover implementing the client first yields numerous errors as it doesnt have a server to communicate with.
+Recommeneded structure:
+
+1.
+2.
+8.
+4.
+5.
+7.
+9.
+6.
+3.
+
+Rather than having us model staff make us model a check in / check out system to track their working hours.
+
+This could have been a really interesting Coursework modelling a POS system but instead turned out into a constricted mess.

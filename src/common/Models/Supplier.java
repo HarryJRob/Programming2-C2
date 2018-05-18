@@ -2,11 +2,15 @@ package common.Models;
 
 import common.Model;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Supplier extends Model {
+//Models a supplier
+public class Supplier extends Model implements Serializable {
 
+	private static final long serialVersionUID = -2388140445781607416L;
+	
 	private Number distance;
 	private List<Ingredient> suppliedIngredients;
 	

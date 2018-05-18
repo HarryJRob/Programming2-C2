@@ -1,13 +1,22 @@
 import server.*;
+import server.StockManager.MoniteredDish;
+import server.StockManager.MoniteredIngredient;
+import server.StockManager.MoniteredItem;
 import server.StockManager.StockManager;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,10 +31,8 @@ public class ServerApplication implements ServerInterface {
 	private StockManager stockManager;
 	private List<User> users;
 	private List<Postcode> postcodes;
-	private List<Order> orders;
 	private List<Supplier> suppliers;
-	private List<Drone> drones;
-	private List<Staff> staffList;
+
 	
 	public static void main(String[] args) {
 		ServerApplication serverApplication = new ServerApplication();
@@ -33,15 +40,15 @@ public class ServerApplication implements ServerInterface {
 	}
 
 	public ServerInterface initialise() {
-		new Thread(new ConnectionManager()).start();
-		
 		stockManager = new StockManager();
 		users = new ArrayList<User>();
 		postcodes = new ArrayList<Postcode>();
-		orders = new ArrayList<Order>();
 		suppliers = new ArrayList<Supplier>();
-		drones = new ArrayList<Drone>();
-		staffList = new ArrayList<Staff>();
+		
+		new PersistenceLayer().loadPersistence();
+		
+		new Thread(new ConnectionManager()).start();
+		new Thread(stockManager).start();
 		
 		return this;
 	}
@@ -51,177 +58,139 @@ public class ServerApplication implements ServerInterface {
 	}
 	
 
+	//Listens on a server socket and creates new connections
 	private class ConnectionManager implements Runnable {
 
-		List<Socket> connectionList;
-		
-		public ConnectionManager() {
-			connectionList = new ArrayList<Socket>();
-			new Thread(new ConnectionMaker()).start();
-		}
-		
-		//Establishes connections with the clients
-		private class ConnectionMaker implements Runnable {
+		//A thread for each connection
+		//Note: I wanted to have a thread per 25 connections but the user of the Comms class causes issues with this
+		private class Connection implements Runnable {
 
+			Socket socket;
+			
+			public Connection(Socket s) {
+				socket = s;
+			}
+			
 			@Override
 			public void run() {
-				try {
-					ServerSocket serverSocket = new ServerSocket(Comms.PORT_NUM);
-					Socket tempRef;
-					while(true) {
-						try {
-							tempRef = serverSocket.accept();
-							System.out.println(tempRef.toString());
-							synchronized (connectionList) {
-								connectionList.add(tempRef);
-							}
-							tempRef = null;
-						} catch (IOException e) { }
-						serverSocket.close();
-					}
-				} catch (IOException e) {
-					System.out.println("Failed to establish Server Socket");
-					e.printStackTrace();
+				while(true) {
+					Message m = Comms.recieveMessage(socket);
+					if(m != null)
+						System.out.println(socket.toString() + "\t" + m.getMessageType());
+					else
+						break;
+					parseMessage(m, socket);
 				}
 			}
 			
-		}
-
-		//Processes the inputs from the clients
-		@Override
-		public void run() {
-			long startTime;
-			while(true) {
-				startTime = System.currentTimeMillis();
-				
-				synchronized (connectionList) {
-					for(Socket curSoc : connectionList) {
+			//Parses a input message
+			private void parseMessage(Message m, Socket s) {
+				switch(m.getMessageType()) {
+					
+					case "REGISTER_USER":
+					{
+						User u = (User) m.getMessageContents();
+						synchronized (users) {
+							users.add(u);
+						}
+						Comms.sendMessage(m, s);
 						
-						try {
-							if(curSoc.getInputStream().read() == -1) {
-								curSoc.close();
-								connectionList.remove(curSoc);
-							}
-							else {
-								Message curMessage = null;
-								do {
-									curMessage = (Message) Comms.recieveMessage(curSoc);
-
-									
-									if(curMessage != null)
-										parseMessage(curMessage, curSoc);
-									
-								} while(curMessage != null);
-							}
-						} catch (IOException e) { }
-						
+						break;
 					}
+					case "LOGIN_USER":
+					{
+						User u = (User) m.getMessageContents();
+						boolean userExists = false;
+						synchronized(users) {
+							if (users.contains(u)) {
+								userExists = true;
+							} 
+						}
+						
+						if (userExists) {
+							Comms.sendMessage(m, s);
+						} else {
+							Comms.sendMessage(null, s);
+						}
+						
+						break;
+					}
+					case "GET_POSTCODES":
+					{
+						synchronized(postcodes) {
+							Comms.sendMessage(new Message(postcodes.toString(), (ArrayList<Postcode>) postcodes), s);
+						}
+						break;
+					}
+					case "GET_DISHES":
+					{
+						synchronized(stockManager) {
+							Comms.sendMessage(new Message("RETURN", (ArrayList<Dish>) stockManager.getDishes()), s);
+						}
+						break;
+					}
+					case "NEW_ORDER":
+					{
+						Order o = (Order) m.getMessageContents();
+						stockManager.addOrder(o);
+						Comms.sendMessage(m, s);
+						break;
+					}
+					case "GET_ORDERS":
+					{
+
+						Comms.sendMessage(new Message("RETURN", (ArrayList<Order>) stockManager.getOrders()), s);
+						break;
+					}
+					case "CANCEL_ORDER":
+					{
+						Order o = (Order) m.getMessageContents();
+						stockManager.removeOrder(o);
+						break;
+					}
+				
 				}
-				try {
-					long sleepTime = (500 - System.currentTimeMillis() - startTime);
-					if(sleepTime > 0)
-						Thread.sleep(sleepTime);
-				} catch (InterruptedException e) { }
+				
 			}
 		}
 		
-		private void parseMessage(Message m, Socket s) {
-			System.out.println(m.getMessageType());
-			
-			switch(m.getMessageType()) {
-				
-				case "REGISTER_USER":
-				{
-					User u = (User) m.getMessageContents();
-					synchronized (users) {
-						users.add(u);
-					}
-					Comms.sendMessage(m, s);
-					
-					break;
+		//Create new connections
+		@Override
+		public void run() {
+			try {
+				ServerSocket serverSocket = new ServerSocket(Comms.PORT_NUM);
+				while(true) {
+					try {
+						new Thread (new Connection(serverSocket.accept())).start();;
+					} catch (IOException e) { serverSocket.close(); }
 				}
-				case "LOGIN_USER":
-				{
-					User u = (User) m.getMessageContents();
-					boolean userExists = false;
-					synchronized(users) {
-						if (users.contains(u)) {
-							userExists = true;
-						} 
-					}
-					
-					if (userExists) {
-						Comms.sendMessage(m, s);
-					} else {
-						Comms.sendMessage(null, s);
-					}
-					
-					break;
-				}
-				case "GET_POSTCODES":
-				{
-					synchronized(postcodes) {
-						Comms.sendMessage(new Message("RETURN", postcodes.size()), s);
-						for(Postcode p : postcodes) {
-							Comms.sendMessage(new Message("RETURN", p ), s);
-						}
-					}
-					break;
-				}
-				case "GET_DISHES":
-				{
-					synchronized(stockManager) {
-						List<Dish> dishes = stockManager.getDishes(); 
-						Comms.sendMessage(new Message("RETURN", dishes.size()), s);
-						for(Dish d : dishes) {
-							Comms.sendMessage(new Message("RETURN", d), s);
-						}
-					}
-					break;
-				}
-				case "NEW_ORDER":
-				{
-					Order o = (Order) m.getMessageContents();
-					synchronized (orders) {
-						orders.add(o);
-					}
-					Comms.sendMessage(m, s);
-					break;
-				}
-				case "GET_ORDERS":
-				{
-					synchronized(orders) {
-						Comms.sendMessage(new Message("RETURN", orders.size()), s);
-						for(Order o : orders) {
-							Comms.sendMessage(new Message("RETURN", o), s);
-						}
-					}
-					break;
-				}
-				case "CANCEL_ORDER":
-				{
-					synchronized(orders) {
-						orders.remove((Order) m.getMessageContents());
-					}
-					break;
-				}
-			
+			} catch (IOException e) {
+				System.out.println("Failed to establish Server Socket");
+				e.printStackTrace();
 			}
-			
 		}
 	}
 	
 	//This makes no sense but specification says so. ¯\_(ツ)_/¯
+	//Should just be one method
 	private class Configuration {
 		
-		public void loadConfiguration(String filename) throws FileNotFoundException {
+		public void loadConfiguration(String filename) {
+			
+			users.clear();
+			postcodes.clear();
+			suppliers.clear();
+			stockManager.clearDishes();
+			stockManager.clearIngredients();
+			stockManager.clearStaff();
+			stockManager.clearDrones();
+			stockManager.clearOrders();
 			
 			try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
 				String curLine;
 				while((curLine = reader.readLine()) != null) {
 					//Parse curLine
 					String[] parts = curLine.split(":");
-					
 					switch(parts[0]) {
 					
 					case "SUPPLIER":
@@ -229,22 +198,34 @@ public class ServerApplication implements ServerInterface {
 						break;
 						
 					case "INGREDIENT":
-						//Whether a ingredient can be if a invalid supplier is given is unspecified...
+						//Whether a ingredient can be added if a invalid supplier is given is unspecified...
 						//In my implementation I will assume the supplier must be valid
 						for(Supplier s : suppliers) {
 							if(s.getName().equals(parts[3])) {
-								
+								stockManager.addIngredient(new Ingredient(parts[1], parts[2], s), Float.valueOf(parts[4]), Float.valueOf(parts[5]));
 								break;
 							}
 						}
 						break;
 						
 					case "DISH":
-						//TODO: Implement stuff
+						//Whether a dish can be added if a invalid ingredient is given is unspecified...
+						//In my implementation I will assume a dish can only be added given valid ingredients
+						Map<Ingredient, Number> ingredientList = new HashMap<Ingredient, Number>();
+						for(String curPart : parts[6].split(",")) {
+							String[] quants = curPart.split(" * ");
+							
+							Ingredient i = stockManager.ingredientExists(quants[0].trim());
+							if(i == null) {
+								break;
+							}
+							ingredientList.put(i, Float.valueOf(quants[1]));
+						}
+						stockManager.addDish(new Dish(parts[1], parts[2], Float.valueOf(parts[3]), ingredientList), Float.valueOf(parts[4]), Float.valueOf(parts[5]));
 						break;
 						
 					case "USER":
-						//Whether a user can be if a invalid postcode is given is unspecified...
+						//Whether a user can be added if a invalid postcode is given is unspecified...
 						//In my implementation I will assume a user can only be added given a valid postcode
 						for(Postcode p : postcodes) {
 							if(p.getName().equals(parts[4])) {
@@ -259,16 +240,36 @@ public class ServerApplication implements ServerInterface {
 						break;	
 						
 					case "STAFF":
-						//TODO: Implement stuff
+						stockManager.getStaff().add(new Staff(parts[1]));
 						break;
 					case "DRONE":
-						//TODO: Implement stuff
+						stockManager.getDrones().add(new Drone(Float.valueOf(parts[1])));
 						break;
 					case "ORDER":
-						//TODO: Implement stuff
+						//Whether a order can be added if a invalid dish is given is unspecified...
+						//In my implementation I will assume a order can only be added given valid dishes
+						HashMap<Dish, Number> dishList = new HashMap<Dish, Number>();
+						for(String curPart : parts[2].split(",")) {
+							String[] quants = curPart.split(" * ");
+							
+							Dish i = stockManager.dishExists(quants[0].trim());
+							if(i == null) {
+								break;
+							}
+							dishList.put(i, Float.valueOf(quants[1]));
+						}
+						for(User u : users) {
+							if(u.getName() == parts[1]) {
+								stockManager.addOrder(new Order(u, Float.valueOf(parts[2]), dishList));
+								break;
+							}
+						}
+						
 						break;
 					case "STOCK":
-						//TODO: Implement stuff
+						if(!stockManager.setDishStock(parts[1], Float.valueOf(parts[2]))) {
+							stockManager.setIngredientStock(parts[1], Float.valueOf(parts[2]));
+						}
 						break;
 					}
 				}
@@ -279,6 +280,145 @@ public class ServerApplication implements ServerInterface {
 		}
 	}
 	
+	//This makes no sense but specification says so. ¯\_(ツ)_/¯
+	//Should just be two methods which the interface should provide since the backend doesn't know when the front end finishes loading / exits.
+	private class PersistenceLayer {
+		
+		//No Method provided for when the client closes so the backend doesn't know when to do this???
+		public void savePersistence() {
+			File file = new File("persistence.txt");
+			
+			try {
+				if(file.exists()) {
+					file.delete();
+					file.createNewFile();
+				}
+				
+				ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(file.getName()));
+				
+				synchronized(users) {
+					for(User u : users) {
+						oos.writeObject(u);
+					}
+				}
+				
+				oos.writeObject("SPACER");
+				
+				synchronized(postcodes) {
+					for(Postcode p : postcodes) {
+						oos.writeObject(p);
+					}
+				}
+				
+				oos.writeObject("SPACER");
+				
+				synchronized(suppliers) {
+					for(Supplier s : suppliers) {
+						oos.writeObject(s);
+					}
+				}
+	
+				oos.writeObject("SPACER");
+				
+				ArrayList<MoniteredIngredient> items = (ArrayList<MoniteredIngredient>) stockManager.getMoniteredIngredients();
+				synchronized(items) {
+					for(MoniteredItem i : items) {
+						oos.writeObject(i);
+					}
+				}
+				
+				oos.writeObject("SPACER");
+				
+				ArrayList<MoniteredDish> dishes = (ArrayList<MoniteredDish>) stockManager.getMoniteredDishes();
+				synchronized(dishes) {
+					for(MoniteredDish d : dishes) {
+						oos.writeObject(d);
+					}
+				}
+				
+				oos.writeObject("SPACER");
+				
+				ArrayList<Order> orders = stockManager.getOrders();
+				
+				synchronized(orders) {
+					for(Order o : orders) {
+						oos.writeObject(o);
+					}
+				}
+				
+				oos.writeObject("SPACER");
+				
+				ArrayList<Staff> staffList = (ArrayList<Staff>) stockManager.getStaff();
+				
+				synchronized(staffList) {
+					for(Staff s : staffList) {
+						oos.writeObject(s);
+					}
+				}
+				
+				oos.writeObject("SPACER");
+				
+				ArrayList<Drone> drones = (ArrayList<Drone>) stockManager.getDrones();
+				
+				synchronized(drones) {
+					for(Drone d : drones) {
+						oos.writeObject(d);
+					}
+				}
+				
+				oos.close();
+			} catch(IOException e) {
+				System.out.println("Error while saving persistence: \n"+ e.getMessage());
+			}
+		}
+		
+		//Load objects from the file detecting their type
+		public void loadPersistence() {
+			
+			File file = new File("persistence.txt");
+			
+			if(file.exists()) {
+				try {
+					ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file.getName()));
+					
+					Object curObj = null;
+					
+					do {
+						
+						curObj = ois.readObject();
+						
+						if(curObj instanceof User) {
+							users.add((User) curObj);
+						} else if(curObj instanceof Postcode) {
+							postcodes.add((Postcode) curObj);
+						} else if(curObj instanceof Supplier) {
+							suppliers.add((Supplier) curObj);
+						} else if(curObj instanceof MoniteredDish) {
+							MoniteredDish d = (MoniteredDish) curObj;
+							stockManager.addDish(d.getDish(), d.getResupplyThreshold(), d.getResupplyAmount());
+							stockManager.setDishStock(d.getDish(), d.getStockedAmount());
+						} else if(curObj instanceof MoniteredIngredient) {
+							MoniteredIngredient i = (MoniteredIngredient) curObj;
+							stockManager.addIngredient(i.getIngredient(), i.getResupplyThreshold(), i.getResupplyAmount());
+							stockManager.setIngredientStock(i.getIngredient(), i.getStockedAmount());
+						} else if(curObj instanceof Order) {
+							stockManager.addOrder((Order) curObj);
+						} else if(curObj instanceof Staff) {
+							stockManager.getStaff().add((Staff) curObj);
+						} else if(curObj instanceof Drone) {
+							stockManager.getDrones().add((Drone) curObj);
+						}
+						
+					} while(curObj != null);
+					
+					ois.close();
+				} catch(IOException | ClassNotFoundException e) {
+					System.out.println("Error while loading persistence: \n"+ e.getMessage());
+				}
+			}
+			
+		}
+	}
 	
 	//					--- Interface Methods ---
 	
@@ -290,12 +430,12 @@ public class ServerApplication implements ServerInterface {
 	
 	@Override
 	public void setRestockingIngredientsEnabled(boolean enabled) {
-		// TODO Auto-generated method stub
+		stockManager.willRestockIngredients(enabled);
 	}
 
 	@Override
 	public void setRestockingDishesEnabled(boolean enabled) {
-		// TODO Auto-generated method stub
+		stockManager.willRestockDishes(enabled);
 	}
 
 	@Override
@@ -425,19 +565,19 @@ public class ServerApplication implements ServerInterface {
 
 	@Override
 	public List<Drone> getDrones() {
-		return drones;
+		return stockManager.getDrones();
 	}
 
 	@Override
 	public Drone addDrone(Number speed) {
 		Drone d = new Drone(speed);
-		drones.add(d);
+		stockManager.getDrones().add(d);
 		return d;
 	}
 
 	@Override
 	public void removeDrone(Drone drone) throws UnableToDeleteException {
-		drones.remove(drone);
+		stockManager.getDrones().remove(drone);
 	}
 
 	@Override
@@ -447,41 +587,39 @@ public class ServerApplication implements ServerInterface {
 
 	@Override
 	public String getDroneStatus(Drone drone) {
-		// TODO Auto-generated method stub
-		return null;
+		return drone.getStatus();
 	}
 
 	@Override
 	public List<Staff> getStaff() {
-		return staffList;
+		return stockManager.getStaff();
 	}
 
 	@Override
 	public Staff addStaff(String name) {
 		Staff s = new Staff(name);
-		staffList.add(s);
+		stockManager.getStaff().add(s);
 		return s;
 	}
 
 	@Override
 	public void removeStaff(Staff staff) throws UnableToDeleteException {
-		staffList.remove(staff);
+		stockManager.getStaff().remove(staff);
 	}
 
 	@Override
 	public String getStaffStatus(Staff staff) {
-		// TODO Auto-generated method stub
-		return null;
+		return staff.getStatus();
 	}
 
 	@Override
 	public List<Order> getOrders() {
-		return orders;
+		return stockManager.getOrders();
 	}
 
 	@Override
 	public void removeOrder(Order order) throws UnableToDeleteException {
-		orders.remove(order);	
+		stockManager.removeOrder(order);;	
 	}
 
 	@Override
@@ -491,13 +629,12 @@ public class ServerApplication implements ServerInterface {
 
 	@Override
 	public boolean isOrderComplete(Order order) {
-		return order.isFinished();
+		return order.getStatus().equals("Complete");
 	}
 
 	@Override
 	public String getOrderStatus(Order order) {
-		// TODO Auto-generated method stub
-		return null;
+		return order.getStatus();
 	}
 
 	@Override

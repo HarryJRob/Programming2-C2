@@ -4,6 +4,7 @@ import java.io.Serializable;
 
 import common.Model;
 
+//Models a postcode
 public class Postcode extends Model implements Serializable {
 
 	private static final long serialVersionUID = -2125008660985860360L;

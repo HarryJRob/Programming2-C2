@@ -1,24 +1,25 @@
 package common.Models;
 
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Map;
 
 import common.Model;
 
+//Models a Order
 public class Order extends Model implements Serializable {
 
 	private static final long serialVersionUID = -1688260084018912759L;
 
 	private User user;
 	private Number distance;
-	private Map<Dish, Number> orderedDishes;
-	private boolean isFinished;
+	private HashMap<Dish, Number> orderedDishes;
+	private String status = "Ordered";
 	
-	public Order(User user, Number distance, Map<Dish, Number> orderedDishes) {
+	public Order(User user, Number distance, HashMap<Dish, Number> orderedDishes) {
 		this.user = user;
 		this.distance = distance;
 		this.orderedDishes = orderedDishes;
-		this.isFinished = false;
 	}
 	
 	public User getUser() {
@@ -36,13 +37,17 @@ public class Order extends Model implements Serializable {
 	public Number getCost() {
 		Number total = 0;
 		for(Number n : orderedDishes.values()) {
-			total = (float) total + (float) n;
+			total = total.floatValue() + n.floatValue();
 		}
 		return total;
 	}
 	
-	public boolean isFinished() {
-		return isFinished;
+	public String getStatus() {
+		return status;
+	}
+	
+	public void setStatus(String status) {
+		this.status = status;
 	}
 	
 	@Override

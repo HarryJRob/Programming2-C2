@@ -1,10 +1,16 @@
 package server.StockManager;
 
-public abstract class MoniteredItem {
+import java.io.Serializable;
+
+//Provides functionality to monitor the stock level of a given item
+public abstract class MoniteredItem implements Serializable {
+	
+	private static final long serialVersionUID = -6132110613878030107L;
 	
 	protected Number stockedAmount;
 	protected Number resupplyAmount;
 	protected Number resupplyThreshold;
+	protected boolean beingRestocked = false;
 	
 	protected MoniteredItem(Number stockedAmount, Number resupplyAmount, Number resupplyThreshold) {
 		this.stockedAmount = stockedAmount;
@@ -12,27 +18,36 @@ public abstract class MoniteredItem {
 		this.resupplyThreshold = resupplyThreshold;
 	}
 	
-	public void setStock(Number stock) {
+	public synchronized void setStock(Number stock) {
 		this.stockedAmount = stock;
 	}
 	
-	public void setThreshold(Number threshold) {
+	public synchronized void setThreshold(Number threshold) {
 		this.resupplyThreshold = threshold;
 	}
 	
-	public void setResupplyAmt(Number amt) {
+	public synchronized void setResupplyAmt(Number amt) {
 		this.resupplyAmount = amt;
 	}
 	
-	public Number getStockedAmount() {
+	public synchronized void setBeingRestocked(boolean b) {
+		this.beingRestocked = b;
+	}
+	
+	public synchronized Number getStockedAmount() {
 		return stockedAmount;
 	}
 	
-	public Number getResupplyAmount() {
+	public synchronized Number getResupplyAmount() {
 		return resupplyAmount;
 	}
 	
-	public Number getResupplyThreshold() {
+	public synchronized Number getResupplyThreshold() {
 		return resupplyThreshold;
 	}
+	
+	public synchronized boolean isBeingRestocked() {
+		return beingRestocked;
+	}
+	
 }

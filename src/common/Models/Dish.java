@@ -2,11 +2,15 @@ package common.Models;
 
 import common.Model;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Dish extends Model {
+//Models a dish
+public class Dish extends Model implements Serializable {
 
+	private static final long serialVersionUID = 1043495467678552016L;
+	
 	private String description;
 	private Number price;
 	private Map<Ingredient, Number> ingredientAmounts;

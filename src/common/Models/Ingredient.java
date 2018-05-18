@@ -1,9 +1,14 @@
 package common.Models;
 
+import java.io.Serializable;
+
 import common.Model;
 
-public class Ingredient extends Model {
+//Models a ingredient
+public class Ingredient extends Model implements Serializable {
 
+	private static final long serialVersionUID = -6039388936067769695L;
+	
 	private String unit;
 	private Supplier supplier;
 	
