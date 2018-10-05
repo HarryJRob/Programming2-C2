@@ -11,7 +11,7 @@ import common.*;
 import common.Models.*;
 import common.communcation.*;
 
-
+//Testing VSCode
 public class ClientApplication implements ClientInterface {
 
 	Socket clientSocket;
